@@ -19,7 +19,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 
 ```yaml
 - name: Run inline script
-  uses: aliuq/script-action@v1
+  uses: aliuq/script-action@v2
   with:
     script: |
       console.log("Hello from Script Action")
@@ -29,7 +29,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 
 ```yaml
 - name: Run with tsx
-  uses: aliuq/script-action@v1
+  uses: aliuq/script-action@v2
   with:
     bun: false
     zx: true
@@ -43,7 +43,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 
 ```yaml
 - name: Install packages before running
-  uses: aliuq/script-action@v1
+  uses: aliuq/script-action@v2
   with:
     packages: |
       axios
@@ -60,7 +60,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 
 ```yaml
 - name: Use Bun auto install
-  uses: aliuq/script-action@v1
+  uses: aliuq/script-action@v2
   with:
     bun: true
     auto_install: true
@@ -77,7 +77,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 ```yaml
 - name: Produce outputs
   id: script
-  uses: aliuq/script-action@v1
+  uses: aliuq/script-action@v2
   with:
     script: |
       output("status", "ok")
