@@ -7,8 +7,8 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: bunx biome check --write {staged_files}
-      exclude: 'dist/*'
+      run: bunx biome check --no-errors-on-unmatched --write {staged_files}
+      exclude: "dist/*"
       stage_fixed: true
     # test:
     #   glob: '.github/workflows/*.{yml,yaml}'
