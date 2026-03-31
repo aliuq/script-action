@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - 'dist/**'
+      - "dist/**"
   workflow_dispatch:
     inputs:
       debug:

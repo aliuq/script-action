@@ -7,7 +7,7 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: bunx eslint {staged_files} --fix
+      run: bunx biome check --write {staged_files}
       exclude: 'dist/*'
       stage_fixed: true
     # test:
