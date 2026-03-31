@@ -1,106 +1,154 @@
 # Script Action
 
-A powerful GitHub Action for executing TypeScript/JavaScript scripts in workflows. Supports multiple runtimes (Bun/TSX), ESM modules, and ZX syntax.
+Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `tsx`, while keeping ESM-first ergonomics and optional ZX support.
 
-## ✨ Features
+## Highlights
 
-- 🚀 Dual Runtime Support: Execute scripts using either Bun or TSX
-- 📦 Smart Package Management: Support for both manual specification and automatic dependency installation
-- 🔧 ESM Native Support: Full ES modules syntax compatibility
-- ⚡ ZX Integration: Google ZX syntax support in non-Bun mode
-- 🌈 Cross-platform: Windows, macOS and Linux support
+- Runs as a standard JavaScript action on `node24`
+- Supports two execution paths:
+  - `bun: true` for Bun-powered scripts
+  - `bun: false` for Node + `tsx`
+- Supports `zx` globals when running in `tsx` mode
+- Installs requested packages on demand
+- Can auto-install dependencies in Bun mode
+- Includes local quality gates with `Biome`, `Vitest`, `tsc`, and `tsdown`
 
-## 🚀 Quick Start
+## Quick start
 
-### Basic Usage
+### Run a Bun script
 
 ```yaml
-- name: Script Action
+- name: Run inline script
   uses: aliuq/script-action@v1
   with:
     script: |
-      console.log('This is a basic message')
+      console.log("Hello from Script Action")
 ```
 
-### Bun Mode
+### Run with `tsx` + ZX
 
 ```yaml
-- name: Run with Bun
-  uses: aliuq/script-action@v1
-  with:
-    bun: true
-    script: |
-      const response = await fetch('https://api.github.com')
-      console.log(await response.json())
-```
-
-### Auto Install Dependencies
-
-```yaml
-- name: Auto install dependencies
-  uses: aliuq/script-action@v1
-  with:
-    bun: true
-    auto_install: true
-    script: |
-      import { Octokit } from 'octokit'
-      const octokit = new Octokit()
-      const { data } = await octokit.rest.repos.get({
-        owner: 'aliuq',
-        repo: 'script-action'
-      })
-      console.log(data)
-```
-
-### Using ZX Syntax
-
-```yaml
-- name: Use ZX syntax
+- name: Run with tsx
   uses: aliuq/script-action@v1
   with:
     bun: false
     zx: true
     script: |
-      await $`ls -la`
-      const files = await glob('**/*.ts')
-      console.log('TypeScript files:', files)
+      echo("workspace")
+      const cwd = await $`pwd`.text()
+      console.log(cwd.trim())
 ```
 
-### Output Variables
-
-Use the `output` function to set output variables:
+### Install packages explicitly
 
 ```yaml
-- name: Output variables
+- name: Install packages before running
+  uses: aliuq/script-action@v1
+  with:
+    packages: |
+      axios
+      dayjs
+    script: |
+      import axios from "axios"
+      import dayjs from "dayjs"
+
+      const { data } = await axios.get("https://api.github.com/zen")
+      console.log(dayjs().format("YYYY-MM-DD"), data)
+```
+
+### Let Bun auto-install dependencies
+
+```yaml
+- name: Use Bun auto install
+  uses: aliuq/script-action@v1
+  with:
+    bun: true
+    auto_install: true
+    script: |
+      import { Octokit } from "@octokit/rest"
+
+      const octokit = new Octokit()
+      const { data } = await octokit.rest.rateLimit.get()
+      console.log(data.rate)
+```
+
+### Set outputs
+
+```yaml
+- name: Produce outputs
   id: script
   uses: aliuq/script-action@v1
   with:
     script: |
-      output('key', 'value')
+      output("status", "ok")
+      outputJson({ version: "1.0.0", runtime: process.env.BUN ? "bun" : "tsx" })
 ```
 
-## Input Parameters
+## Inputs
 
-| Parameter | Description | Required | Default |
-|-----------|-------------|:--------:|:-------:|
-| `script` | Script content to execute | Yes | - |
-| `packages` | Additional npm packages to install | No | - |
-| `bun` | Use Bun runtime | No | "true" |
-| `auto_install` | Auto install dependencies (Bun mode only) | No | "false" |
-| `zx` | Enable Google/ZX syntax (non-Bun mode only) | No | "true" |
-| `debug` | Enable debug logging | No | "false" |
+| Input | Description | Required | Default |
+| --- | --- | --- | --- |
+| `script` | Inline script content to execute | Yes | - |
+| `packages` | Packages to install before running. Supports multiline values, commas, or spaces. | No | `""` |
+| `bun` | Run the script with Bun | No | `"true"` |
+| `auto_install` | Remove `node_modules` first so Bun can auto-install imported dependencies | No | `"false"` |
+| `zx` | Enable ZX globals when `bun` is `false` | No | `"true"` |
+| `debug` | Enable debug logging | No | `"false"` |
 
-## Runtime Environment
+## Runtime behavior
 
-- Node.js: Using tsx + @actions/core + zx (when bun=false)
-- Bun: Using bun + @actions/core (when bun=true)
+- The primary action entrypoint is `dist/index.js` and runs on `node24`
+- When `bun: true`, the action downloads Bun on demand and executes the rendered script with `bun run -i`
+- When `bun: false`, the action installs `tsx` and executes the rendered script with the current Node runtime
+- Template files are embedded into the built action artifact, then restored to a temporary working directory before execution
 
-## Complete Examples
+## Local development
 
-For more usage examples, please refer to [.github/workflows/ci.yaml](.github/workflows/ci.yaml).
+This repository now uses:
+
+- `Biome` for formatting and linting
+- `Vitest` for local scenario-based tests
+- `tsc --noEmit` for type-checking
+- `tsdown` for bundling `dist/index.js`
+
+### Commands
+
+```bash
+bun install
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+```
+
+### Adding local test scenarios
+
+Local runtime tests are organized by scenario instead of by implementation detail:
+
+- put one scenario file under `tests/scenarios/*.scenario.ts`
+- `tests/run.test.ts` auto-detects them from the filesystem
+- add utility-level coverage in `tests/utils.test.ts` only for shared helpers
+
+That means adding a new action scenario is usually just “create one new scenario file”.
+
+### Watch build
+
+```bash
+bun run dev
+```
+
+`dev` runs `tsdown` in watch mode for the single `dist/index.js` bundle.
+
+## CI coverage
+
+The repository validates:
+
+- local tooling checks on Node 24
+- cross-platform action execution on Linux, macOS, and Windows
+- Bun mode, `tsx` mode, package installation, and ZX scenarios
 
 ## License
 
-MIT License
+MIT
 
-[中文文档](README.zh.md)
+[中文文档](./README.zh.md)

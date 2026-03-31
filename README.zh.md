@@ -1,104 +1,152 @@
 # Script Action
 
-一个强大的 GitHub Action，用于在工作流中执行 TypeScript/JavaScript 脚本。支持多运行时（Bun/TSX）、ESM 模块和 ZX 语法。
+在 GitHub Actions 中直接运行 TypeScript / JavaScript 脚本，支持 Bun 和 `tsx` 两种执行方式，并可按需启用 ZX。
 
-## ✨ 特性
+## 特性
 
-- 🚀 双运行时支持：可选择使用 Bun 或 TSX 执行脚本
-- 📦 智能包管理：支持手动指定或自动安装依赖
-- 🔧 ESM 原生支持：完整支持 ES 模块语法
-- ⚡ ZX 集成：在非 Bun 模式下支持 Google ZX 语法
-- 🌈 跨平台：支持 Windows、macOS 和 Linux
+- 主 Action 运行时已升级到 `node24`
+- 支持两种脚本执行路径
+  - `bun: true`：使用 Bun 执行
+  - `bun: false`：使用 Node + `tsx` 执行
+- 在 `tsx` 模式下支持 ZX 全局能力
+- 支持按需安装依赖
+- 支持 Bun 模式下自动安装依赖
+- 本地开发链路包含 `Biome`、`Vitest`、`tsc` 与 `tsdown`
 
-## 🚀 快速开始
+## 快速开始
 
-### 基础使用
+### 运行 Bun 脚本
 
 ```yaml
-- name: Script Action
+- name: Run inline script
   uses: aliuq/script-action@v1
   with:
     script: |
-      console.log('This is a basic message')
+      console.log("Hello from Script Action")
 ```
 
-### Bun 模式
+### 使用 `tsx` + ZX
 
 ```yaml
-- name: Run with Bun
-  uses: aliuq/script-action@v1
-  with:
-    bun: true
-    script: |
-      const response = await fetch('https://api.github.com')
-      console.log(await response.json())
-```
-
-### 自动安装依赖
-
-```yaml
-- name: Auto install dependencies
-  uses: aliuq/script-action@v1
-  with:
-    bun: true
-    auto_install: true
-    script: |
-      import { Octokit } from 'octokit'
-      const octokit = new Octokit()
-      const { data } = await octokit.rest.repos.get({
-        owner: 'aliuq',
-        repo: 'script-action'
-      })
-      console.log(data)
-```
-
-### 使用 ZX 语法
-
-```yaml
-- name: Use ZX syntax
+- name: Run with tsx
   uses: aliuq/script-action@v1
   with:
     bun: false
     zx: true
     script: |
-      await $`ls -la`
-      const files = await glob('**/*.ts')
-      console.log('TypeScript files:', files)
+      echo("workspace")
+      const cwd = await $`pwd`.text()
+      console.log(cwd.trim())
+```
+
+### 显式安装依赖
+
+```yaml
+- name: Install packages before running
+  uses: aliuq/script-action@v1
+  with:
+    packages: |
+      axios
+      dayjs
+    script: |
+      import axios from "axios"
+      import dayjs from "dayjs"
+
+      const { data } = await axios.get("https://api.github.com/zen")
+      console.log(dayjs().format("YYYY-MM-DD"), data)
+```
+
+### 让 Bun 自动安装依赖
+
+```yaml
+- name: Use Bun auto install
+  uses: aliuq/script-action@v1
+  with:
+    bun: true
+    auto_install: true
+    script: |
+      import { Octokit } from "@octokit/rest"
+
+      const octokit = new Octokit()
+      const { data } = await octokit.rest.rateLimit.get()
+      console.log(data.rate)
 ```
 
 ### 输出变量
 
-使用 `output` 函数输出变量：
-
 ```yaml
-- name: Output variables
+- name: Produce outputs
   id: script
   uses: aliuq/script-action@v1
   with:
     script: |
-      output('key', 'value')
+      output("status", "ok")
+      outputJson({ version: "1.0.0", runtime: process.env.BUN ? "bun" : "tsx" })
 ```
 
 ## 输入参数
 
-| 参数 | 描述 | 必填 | 默认值 |
-|------|------|------|--------|
-| `script` | 脚本内容 | 是 | - |
-| `packages` | 需要安装的额外 npm 包 | 否 | - |
-| `bun` | 是否使用 bun 执行脚本 | 否 | "true" |
-| `auto_install` | 自动下载依赖包（仅在 bun 模式下有效） | 否 | "false" |
-| `zx` | 启用 google/zx 语法（仅在非 bun 模式下有效） | 否 | "true" |
-| `debug` | 是否打印调试日志 | 否 | "false" |
+| 参数 | 说明 | 必填 | 默认值 |
+| --- | --- | --- | --- |
+| `script` | 要执行的内联脚本内容 | 是 | - |
+| `packages` | 运行前安装的依赖，支持多行、逗号或空格分隔 | 否 | `""` |
+| `bun` | 是否使用 Bun 执行脚本 | 否 | `"true"` |
+| `auto_install` | 先删除 `node_modules`，让 Bun 根据导入内容自动安装依赖 | 否 | `"false"` |
+| `zx` | 当 `bun` 为 `false` 时启用 ZX 全局能力 | 否 | `"true"` |
+| `debug` | 是否输出调试日志 | 否 | `"false"` |
 
-## 运行环境
+## 运行机制
 
-- Node.js 环境：使用 tsx + @actions/core + zx（当 bun=false）
-- Bun 环境：使用 bun + @actions/core（当 bun=true）
+- 主入口为 `dist/index.js`，由 GitHub Actions 的 `node24` 运行
+- 当 `bun: true` 时，Action 会按需安装 Bun，并通过 `bun run -i` 执行渲染后的脚本
+- 当 `bun: false` 时，Action 会安装 `tsx`，并通过当前 Node 运行时执行脚本
+- 模板文件会在构建时打包进 Action 产物，运行时再恢复到临时目录并渲染
 
-## 完整示例
+## 本地开发
 
-更多使用示例请参考 [.github/workflows/ci.yaml](.github/workflows/ci.yaml)。
+当前仓库的本地工具链如下：
+
+- `Biome`：格式化与静态检查
+- `Vitest`：本地场景测试
+- `tsc --noEmit`：类型检查
+- `tsdown`：产出 `dist/index.js`
+
+### 常用命令
+
+```bash
+bun install
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+```
+
+### 如何扩展本地场景测试
+
+本地运行时测试现在按“场景”组织，而不是按实现细节组织：
+
+- 每个场景单独放在 `tests/scenarios/*.scenario.ts`
+- `tests/run.test.ts` 会自动通过文件系统发现并执行这些场景
+- `tests/utils.test.ts` 仅覆盖公共工具函数
+
+后续如果要补一个新的 Action 场景，通常只需要新增一个场景文件即可。
+
+### 监听构建
+
+```bash
+bun run dev
+```
+
+`dev` 会以 watch 模式构建单一的 `dist/index.js` 产物。
+
+## CI 覆盖
+
+当前 CI 会验证：
+
+- Node 24 下的本地工具链检查
+- Linux、macOS、Windows 三平台 Action 执行
+- Bun 模式、`tsx` 模式、依赖安装与 ZX 场景
 
 ## 许可证
 
-MIT License
+MIT

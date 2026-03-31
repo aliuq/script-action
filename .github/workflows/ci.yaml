@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - 'dist/**'
+      - "dist/**"
   workflow_dispatch:
     inputs:
       debug:
@@ -23,7 +23,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         mode: [bun, tsx]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Basic Output Test
         uses: ./
@@ -53,7 +53,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Manual Package Installation Test
         uses: ./
@@ -93,7 +93,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: ZX Command Execution Test - bun
         uses: ./

@@ -14,28 +14,32 @@
   ],
   "main": "dist/index.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
-    "dev": "bash scripts/build.sh watch",
-    "build": "bash scripts/build.sh",
-    "lint": "eslint .",
-    "changelog": "bunx changelogithub",
-    "bumpp": "bunx bumpp@9.9.2 --push --tag --commit --all",
-    "release": "bun run build && bun run bumpp && bun run changelog"
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prerelease": "bun run lint && bun run typecheck && bun run test && bun run build",
+    "release": "bunx bumpp --push --tag --commit --all"
   },
   "devDependencies": {
-    "@actions/core": "^1.11.1",
-    "@actions/exec": "^1.1.1",
-    "@actions/github": "^6.0.0",
-    "@antfu/eslint-config": "^3.12.1",
-    "@types/bun": "latest",
-    "@types/node": "^20.17.10",
-    "eslint": "^9.17.0",
-    "handlebars": "^4.7.8",
+    "@biomejs/biome": "^2.4.10",
+    "@actions/core": "^3.0.0",
+    "@actions/exec": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "@types/bun": "^1.1.14",
+    "@types/node": "^25.5.0",
+    "bumpp": "^11.0.1",
+    "handlebars": "^4.7.9",
     "kolorist": "^1.8.0",
-    "lefthook": "^1.10.1",
-    "typescript": "^5.7.2",
-    "unbuild": "^3.0.1"
+    "lefthook": "^2.1.4",
+    "tsdown": "^0.21.7",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
   }
 }
