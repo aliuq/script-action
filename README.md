@@ -100,7 +100,7 @@ Run TypeScript or JavaScript directly inside GitHub Actions with either Bun or `
 - The primary action entrypoint is `dist/index.js` and runs on `node24`
 - When `bun: true`, the action downloads Bun on demand and executes the rendered script with `bun run -i`
 - When `bun: false`, the action installs `tsx` and executes the rendered script with the current Node runtime
-- Template files are read from the repository `templates/` directory and rendered into a temporary working directory before execution
+- Template files are embedded into the built action artifact, then restored to a temporary working directory before execution
 
 ## Local development
 
@@ -120,6 +120,16 @@ bun run typecheck
 bun run test
 bun run build
 ```
+
+### Adding local test scenarios
+
+Local runtime tests are organized by scenario instead of by implementation detail:
+
+- put one scenario file under `tests/scenarios/*.scenario.ts`
+- `tests/run.test.ts` auto-detects them from the filesystem
+- add utility-level coverage in `tests/utils.test.ts` only for shared helpers
+
+That means adding a new action scenario is usually just “create one new scenario file”.
 
 ### Watch build
 

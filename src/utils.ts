@@ -1,9 +1,9 @@
+import { Buffer } from 'node:buffer';
 import type { PathLike } from 'node:fs';
 import fs from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import handlebars from 'handlebars';
@@ -145,8 +145,47 @@ export async function renderTemplates(
   }
 }
 
-export function getTemplateRoot(): string {
-  return fileURLToPath(new URL('../templates', import.meta.url));
+function getTemplateManifest(): Record<string, string> {
+  const manifest = globalThis.SCRIPT_ACTION_TEMPLATE_MANIFEST;
+  if (!manifest || typeof manifest !== 'object') {
+    throw new Error('Embedded template manifest is missing from the build output');
+  }
+
+  return manifest;
+}
+
+/**
+ * Write bundled templates to a temporary directory
+ * @returns directory path
+ */
+export async function writeTemplates(): Promise<string> {
+  const tplDir = await tmpdir('templates');
+  const templateEntries = Object.entries(getTemplateManifest()).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+
+  for (const [relativePath, encodedContent] of templateEntries) {
+    const destinationPath = path.join(tplDir, relativePath);
+    await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+    await fs.writeFile(
+      destinationPath,
+      Buffer.from(encodedContent, 'base64').toString('utf-8'),
+      'utf-8',
+    );
+  }
+
+  isDebug &&
+    (await core.group('Template Files', async () => {
+      for (const [relativePath] of templateEntries) {
+        const tempFile = path.join(tplDir, relativePath);
+        const content = await fs.readFile(tempFile, 'utf-8');
+        core.info(`Template file: ${cyan(relativePath)}`);
+        core.info(content);
+        core.info('');
+      }
+    }));
+
+  return tplDir;
 }
 
 export async function tmpdir(dir = ''): Promise<string> {

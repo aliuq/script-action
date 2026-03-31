@@ -1,6 +1,9 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RunScenario } from './scenarios/types.js';
 
 const coreMock = vi.hoisted(() => ({
   endGroup: vi.fn(),
@@ -15,32 +18,43 @@ const coreMock = vi.hoisted(() => ({
 }));
 
 const fsMock = vi.hoisted(() => ({
-  default: {
-    readFile: vi.fn(),
-    rm: vi.fn(),
-  },
+  readFile: vi.fn(),
+  rm: vi.fn(),
 }));
 
 const utilsMock = vi.hoisted(() => ({
   exist: vi.fn(),
   execCommand: vi.fn(),
-  getTemplateRoot: vi.fn(),
   installBun: vi.fn(),
   logDebug: vi.fn(),
   renderTemplates: vi.fn(),
   tmpdir: vi.fn(),
+  writeTemplates: vi.fn(),
 }));
 
 vi.mock('@actions/core', () => coreMock);
-vi.mock('node:fs/promises', () => fsMock);
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      readFile: fsMock.readFile,
+      rm: fsMock.rm,
+    },
+    readFile: fsMock.readFile,
+    rm: fsMock.rm,
+  };
+});
 vi.mock('../src/utils.js', () => utilsMock);
 
 const TMP_DIR = '/tmp/script-action';
-const MAIN_FILE = path.join(TMP_DIR, 'src', 'index.ts');
 const MODULE_DIR = path.join(TMP_DIR, 'node_modules');
-const TSX_CLI = path.join(MODULE_DIR, 'tsx', 'dist', 'cli.mjs');
+const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
+const INPUT_NAMES = ['script', 'auto_install', 'bun', 'zx'] as const;
+type InputName = (typeof INPUT_NAMES)[number];
 
-function getInputValue(name: string): string {
+function defaultInputValue(name: InputName | string): string {
   switch (name) {
     case 'script':
       return '#!/usr/bin/env node\nconsole.log("hello")';
@@ -55,81 +69,105 @@ function getInputValue(name: string): string {
   }
 }
 
-describe('runAction', () => {
+function expectedInputValue(name: InputName | string, override?: string): string {
+  if (name === 'script' && override) {
+    return override;
+  }
+
+  return override ?? defaultInputValue(name);
+}
+
+async function loadRunScenarios(): Promise<RunScenario[]> {
+  const scenariosDir = path.join(TEST_DIR, 'scenarios');
+  const entries = await fs.readdir(scenariosDir);
+  const scenarioFiles = entries
+    .filter((file) => file.endsWith('.scenario.ts'))
+    .sort((left, right) => left.localeCompare(right));
+
+  const scenarios = await Promise.all(
+    scenarioFiles.map(async (file) => {
+      const moduleUrl = pathToFileURL(path.join(scenariosDir, file)).href;
+      const module = (await import(moduleUrl)) as { default: RunScenario };
+      return module.default;
+    }),
+  );
+
+  return scenarios.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+const runScenarios = await loadRunScenarios();
+
+function resetScenarioMocks(): void {
+  vi.clearAllMocks();
+  vi.resetModules();
+  delete process.env.BUN;
+
+  coreMock.getInput.mockImplementation((name: string) => defaultInputValue(name));
+  coreMock.getMultilineInput.mockReturnValue([]);
+  fsMock.readFile.mockResolvedValue('compiled script');
+  fsMock.rm.mockResolvedValue(undefined);
+  utilsMock.execCommand.mockResolvedValue('');
+  utilsMock.installBun.mockResolvedValue('/bun/bin/bun');
+  utilsMock.renderTemplates.mockResolvedValue(undefined);
+  utilsMock.tmpdir.mockResolvedValue(TMP_DIR);
+  utilsMock.writeTemplates.mockResolvedValue('/repo/templates');
+  utilsMock.exist.mockResolvedValue(true);
+}
+
+describe('runAction scenarios', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.resetModules();
-    delete process.env.BUN;
-
-    coreMock.getInput.mockImplementation((name: string) => getInputValue(name));
-    coreMock.getMultilineInput.mockReturnValue([]);
-    fsMock.default.readFile.mockResolvedValue('compiled script');
-    fsMock.default.rm.mockResolvedValue(undefined);
-    utilsMock.execCommand.mockResolvedValue('');
-    utilsMock.getTemplateRoot.mockReturnValue('/repo/templates');
-    utilsMock.installBun.mockResolvedValue('/bun/bin/bun');
-    utilsMock.renderTemplates.mockResolvedValue(undefined);
-    utilsMock.tmpdir.mockResolvedValue(TMP_DIR);
-    utilsMock.exist.mockResolvedValue(true);
+    resetScenarioMocks();
   });
 
-  it('installs packages with npm and runs tsx when bun is disabled', async () => {
-    coreMock.getMultilineInput.mockReturnValue(['axios dayjs']);
-
-    const { runAction } = await import('../src/run.js');
-    await runAction();
-
-    expect(utilsMock.execCommand).toHaveBeenNthCalledWith(
-      1,
-      'npm',
-      ['install', 'axios', 'dayjs', '@actions/core', '@actions/exec', 'tsx', 'zx'],
-      expect.objectContaining({ cwd: TMP_DIR, silent: true }),
-    );
-    expect(utilsMock.execCommand).toHaveBeenNthCalledWith(
-      2,
-      process.execPath,
-      [TSX_CLI, MAIN_FILE],
-      expect.objectContaining({ cwd: TMP_DIR, silent: false }),
-    );
-    expect(utilsMock.renderTemplates).toHaveBeenCalledWith(
-      '/repo/templates',
-      TMP_DIR,
-      expect.objectContaining({ bun: false, zx: true }),
-    );
-    expect(coreMock.setOutput).toHaveBeenCalledWith('status', 'success');
+  it('discovers scenario files from the filesystem', () => {
+    expect(runScenarios.length).toBeGreaterThan(0);
   });
 
-  it('removes node_modules and runs bun when auto_install is enabled', async () => {
-    coreMock.getInput.mockImplementation((name: string) => {
-      if (name === 'bun') return 'true';
-      if (name === 'auto_install') return 'true';
-      return getInputValue(name);
+  for (const scenario of runScenarios) {
+    it(scenario.name, async () => {
+      coreMock.getInput.mockImplementation((name: string) => {
+        const typedName = name as InputName;
+        const override = INPUT_NAMES.includes(typedName)
+          ? (scenario.inputs?.[typedName] ?? (typedName === 'script' ? scenario.script : undefined))
+          : undefined;
+
+        return expectedInputValue(typedName, override);
+      });
+      coreMock.getMultilineInput.mockReturnValue(scenario.packages ?? []);
+      utilsMock.exist.mockImplementation(async (target: string) => {
+        if (
+          scenario.expectedFailure &&
+          target === path.join(MODULE_DIR, 'tsx', 'dist', 'cli.mjs')
+        ) {
+          return false;
+        }
+
+        return scenario.existingPaths?.includes(target) ?? true;
+      });
+
+      const { runAction } = await import('../src/index.js');
+      await runAction();
+
+      expect(utilsMock.renderTemplates).toHaveBeenCalledWith(
+        '/repo/templates',
+        TMP_DIR,
+        expect.objectContaining(scenario.renderContext),
+      );
+
+      if (scenario.installBunCalls !== undefined) {
+        expect(utilsMock.installBun).toHaveBeenCalledTimes(scenario.installBunCalls);
+      }
+
+      if (scenario.expectedFailure) {
+        expect(coreMock.setFailed).toHaveBeenCalledWith(scenario.expectedFailure);
+        expect(coreMock.setOutput).not.toHaveBeenCalled();
+      } else {
+        expect(coreMock.setOutput).toHaveBeenCalledWith('status', 'success');
+      }
+
+      expect(
+        utilsMock.execCommand.mock.calls.map(([command, args]) => ({ command, args })),
+      ).toEqual(scenario.execCalls);
     });
-    utilsMock.exist.mockImplementation(async (target: string) => target === MODULE_DIR);
-
-    const { runAction } = await import('../src/run.js');
-    await runAction();
-
-    expect(utilsMock.installBun).toHaveBeenCalledTimes(1);
-    expect(fsMock.default.rm).toHaveBeenCalledWith(MODULE_DIR, {
-      recursive: true,
-      force: true,
-    });
-    expect(utilsMock.execCommand).toHaveBeenCalledWith(
-      '/bun/bin/bun',
-      ['run', '-i', MAIN_FILE],
-      expect.objectContaining({ cwd: TMP_DIR, silent: false }),
-    );
-    expect(coreMock.setOutput).toHaveBeenCalledWith('status', 'success');
-  });
-
-  it('fails clearly when the tsx CLI is missing', async () => {
-    utilsMock.exist.mockResolvedValue(false);
-
-    const { runAction } = await import('../src/run.js');
-    await runAction();
-
-    expect(coreMock.setFailed).toHaveBeenCalledWith(`tsx CLI not found at: ${TSX_CLI}`);
-    expect(coreMock.setOutput).not.toHaveBeenCalled();
-  });
+  }
 });

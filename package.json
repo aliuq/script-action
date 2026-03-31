@@ -22,7 +22,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "test": "bun run build && vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "prerelease": "bun run lint && bun run typecheck && bun run test && bun run build",
     "release": "bunx bumpp --push --tag --commit --all"

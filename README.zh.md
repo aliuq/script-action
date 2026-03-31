@@ -100,7 +100,7 @@
 - 主入口为 `dist/index.js`，由 GitHub Actions 的 `node24` 运行
 - 当 `bun: true` 时，Action 会按需安装 Bun，并通过 `bun run -i` 执行渲染后的脚本
 - 当 `bun: false` 时，Action 会安装 `tsx`，并通过当前 Node 运行时执行脚本
-- 模板文件会直接从仓库内的 `templates/` 目录读取，再渲染到临时目录
+- 模板文件会在构建时打包进 Action 产物，运行时再恢复到临时目录并渲染
 
 ## 本地开发
 
@@ -120,6 +120,16 @@ bun run typecheck
 bun run test
 bun run build
 ```
+
+### 如何扩展本地场景测试
+
+本地运行时测试现在按“场景”组织，而不是按实现细节组织：
+
+- 每个场景单独放在 `tests/scenarios/*.scenario.ts`
+- `tests/run.test.ts` 会自动通过文件系统发现并执行这些场景
+- `tests/utils.test.ts` 仅覆盖公共工具函数
+
+后续如果要补一个新的 Action 场景，通常只需要新增一个场景文件即可。
 
 ### 监听构建
 

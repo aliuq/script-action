@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const coreMock = vi.hoisted(() => ({
   endGroup: vi.fn(),
@@ -22,14 +22,12 @@ const execMock = vi.hoisted(() => ({
 vi.mock('@actions/core', () => coreMock);
 vi.mock('@actions/exec', () => execMock);
 
-import { execCommand, exist, getTemplateRoot, renderTemplates } from '../src/utils.js';
+import { execCommand, exist, renderTemplates, writeTemplates } from '../src/utils.js';
 
 describe('utils', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  afterEach(async () => {});
 
   it('captures stdout from execCommand and trims the result', async () => {
     execMock.exec.mockImplementation(async (_command, _args, options) => {
@@ -84,12 +82,28 @@ describe('utils', () => {
     );
   });
 
-  it('resolves the repository template root directly', async () => {
-    const templateRoot = getTemplateRoot();
+  it('writes bundled templates from the embedded manifest', async () => {
+    globalThis.SCRIPT_ACTION_TEMPLATE_MANIFEST = {
+      'package.json': Buffer.from('{"name":"fixture"}').toString('base64'),
+      'src/index.ts': Buffer.from('console.log("hello")\n').toString('base64'),
+      'src/utils.ts': Buffer.from('export const value = 1\n').toString('base64'),
+      'tsconfig.json': Buffer.from('{"compilerOptions":{"strict":true}}').toString('base64'),
+    };
 
-    await expect(exist(templateRoot)).resolves.toBe(true);
-    await expect(exist(path.join(templateRoot, 'package.json'))).resolves.toBe(true);
-    await expect(exist(path.join(templateRoot, 'src', 'index.ts'))).resolves.toBe(true);
+    const templateRoot = await writeTemplates();
+
+    await expect(fs.readFile(path.join(templateRoot, 'package.json'), 'utf-8')).resolves.toBe(
+      '{"name":"fixture"}',
+    );
+    await expect(fs.readFile(path.join(templateRoot, 'src', 'index.ts'), 'utf-8')).resolves.toBe(
+      'console.log("hello")\n',
+    );
+    await expect(fs.readFile(path.join(templateRoot, 'src', 'utils.ts'), 'utf-8')).resolves.toBe(
+      'export const value = 1\n',
+    );
+    await expect(fs.readFile(path.join(templateRoot, 'tsconfig.json'), 'utf-8')).resolves.toBe(
+      '{"compilerOptions":{"strict":true}}',
+    );
   });
 
   it('reports whether a path exists', async () => {
