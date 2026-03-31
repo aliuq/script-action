@@ -99,11 +99,11 @@ export async function runAction(): Promise<void> {
 
     core.info(
       yellow(
-        '!!! Please note that the current working directory is the temporary directory, not the Github workspace directory !!!',
+        '!!! Please note that the current working directory is the temporary directory, not the GitHub workspace directory !!!',
       ),
     );
     core.info(`Current work directory: ${cyan(tmpDir)}`);
-    core.info(`Github workspace directory: ${cyan(process.cwd())}`);
+    core.info(`GitHub workspace directory: ${cyan(process.cwd())}`);
     core.info(
       `If you want to use the workspace directory, please use the environment variable: ${cyan('process.env.GITHUB_WORKSPACE')}`,
     );

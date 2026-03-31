@@ -75,19 +75,20 @@ export async function installBun(): Promise<string> {
 
   // According to the official website, the installation directory is `~/.bun`
   // ~/.bun/bin/bun or C:\Users\runneradmin\.bun\bin\bun.exe
-  const installDir = path.join(process.env.BUN_INSTALL || homedir(), '.bun');
+  const installDir = process.env.BUN_INSTALL ?? path.join(homedir(), '.bun');
   const binDir = path.join(installDir, 'bin');
-  const bunFile = path.join(binDir, 'bun');
+  const bunFileName = isWin ? 'bun.exe' : 'bun';
+  const bunFile = path.join(binDir, bunFileName);
 
   logDebug(`Set Bun install directory: ${cyan(bunFile)}`);
 
   if (!isWin) {
     logDebug(`Install from shell script <https://bun.sh/install>`);
-    await execCommand('curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh');
-    await execCommand('bash /tmp/bun-install.sh');
+    await execCommand('curl', ['-fsSL', 'https://bun.sh/install', '-o', '/tmp/bun-install.sh']);
+    await execCommand('bash', ['/tmp/bun-install.sh']);
   } else {
     logDebug(`Install from shell script <https://bun.sh/install.ps1>`);
-    await execCommand('powershell -c "irm bun.sh/install.ps1 | iex"');
+    await execCommand('powershell', ['-c', 'irm bun.sh/install.ps1 | iex']);
   }
 
   const version = await exec.getExecOutput(`${bunFile} --version`, [], {

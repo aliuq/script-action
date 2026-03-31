@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
 
 export function createTemplateManifest(
@@ -25,7 +26,7 @@ export function createTemplateManifest(
     }
   };
 
-  walk(path.normalize(new URL(templateRoot).pathname));
+  walk(fileURLToPath(templateRoot));
 
   return manifest;
 }
